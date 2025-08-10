@@ -1,0 +1,4 @@
+export interface AppointmentType { id: number; name: string; description: string; }
+export interface WeeklySlot { id: number; day_of_week: number; start_time: string; end_time: string; appointment_type_id: number; capacity: number; }
+export interface Override { id: number; date: string; slot_id: number; override_type: 'closed' | 'custom_slot'; custom_start_time?: string; custom_end_time?: string; notes?: string; }
+export interface Appointment { id: number; user_id: string; slot_id: number; date: string; start_time: string; end_time: string; appointment_type_id: number; status: 'booked' | 'cancelled' | 'completed'; notes?: string; created_at: string; }
