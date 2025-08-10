@@ -9,15 +9,21 @@ const routes = [
   { path: '/', component: Dashboard, meta: { requiresAuth: true } },
   { path: '/login', component: Login, meta: { guest: true } },
   { path: '/register', component: Register, meta: { guest: true } },
-  { path: '/admin', component: ScheduleManager, meta: { requiresAuth: true, admin: true } }
+  { path: '/admin', component: ScheduleManager, meta: { requiresAuth: true, admin: true } },
+  { path: '/:pathMatch(.*)*', redirect: '/' },
 ];
 
-const router = createRouter({ history: createWebHistory(), routes });
+const router = createRouter({ history: createWebHistory(import.meta.env.BASE_URL), routes });
 router.beforeEach(async (to, from, next) => {
-  const auth = useAuthStore();
-  if (to.meta.requiresAuth && !auth.user) return next('/login');
-  if (to.meta.guest && auth.user) return next('/');
-  if (to.meta.admin && auth.user?.role !== 'admin') return next('/');
-  next();
+  const auth = useAuthStore()
+
+  if (typeof auth.ensureReady === 'function') {
+    try { await auth.ensureReady() } catch {}
+  }
+
+  if (to.meta.requiresAuth && !auth.user) return next('/login')
+  if (to.meta.guest && auth.user) return next('/')
+  if (to.meta.admin && auth.user?.role !== 'admin') return next('/')
+  next()
 });
 export default router;

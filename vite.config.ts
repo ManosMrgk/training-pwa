@@ -30,6 +30,7 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url))
     }
   },
+  base: '/training-pwa/',
   build: {
     minify: 'esbuild',
   }
