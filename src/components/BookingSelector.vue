@@ -15,7 +15,7 @@
               label="Select a date"
               readonly
               clearable
-              @click:clear="selectedDate = ''"
+              @click:clear="onClearDate"
             />
           </template>
 
@@ -44,11 +44,8 @@
         >
           <v-card :elevation="1" class="mb-2" outlined dense>
             <v-card-title class="py-2 d-flex align-center">
-              <!-- <v-avatar left color="accent" class="mr-2" size="28">
-                <v-icon :icon="mdiClock" small/>
-              </v-avatar> -->
               <span class="font-weight-bold text-accent">
-                {{ weekDayName }} <!-- {{ selectedDateDisplay }} -->
+                {{ weekDayName }}
                 {{ slot.start_time.slice(0,5) }} - {{ slot.end_time.slice(0,5) }}
               </span>
               <v-spacer />
@@ -196,12 +193,19 @@ export default defineComponent({
       return d.toLocaleDateString(undefined, { day: '2-digit', month: 'long', year: 'numeric' });
     });
 
+    // Manual timeout wrapper -> prevents infinite spinner on stalled network
+    const withTimeout = <T>(p: Promise<T>, ms = 10000) =>
+      Promise.race<T>([
+        p,
+        new Promise<T>((_, reject) => setTimeout(() => reject(new Error('timeout')), ms)) as Promise<T>,
+      ]);
+
     onMounted(async () => {
       loading.value = true;
       try {
         await Promise.all([
-          typesStore.fetchTypes(),
-          slotsStore.fetchSlots(),
+          withTimeout(typesStore.fetchTypes()),
+          withTimeout(slotsStore.fetchSlots()),
         ]);
         await loadForDate(toYMD(selectedDate.value as any));
       } catch (e) {
@@ -214,7 +218,7 @@ export default defineComponent({
     // Re-fetch when date changes (normalize first!)
     watch(selectedDate, async (val) => {
       const ymd = toYMD(val as any);
-      if (!ymd) return; // user cleared the field; do nothing
+      if (!ymd) return; // safeguard
       loading.value = true;
       try {
         await loadForDate(ymd);
@@ -227,17 +231,22 @@ export default defineComponent({
 
     async function loadForDate(dateYMD: string) {
       try {
-        await Promise.all([
-          overridesStore.fetchOverridesByDate(dateYMD),
-          apptStore.fetchBookedCountsForDate(dateYMD), // global counts for capacity
-          auth.user ? apptStore.fetchAppointmentsRange(auth.user.id, 14) : Promise.resolve(),
+        // Any one of these stalling will no longer freeze the UI
+        await Promise.allSettled([
+          withTimeout(overridesStore.fetchOverridesByDate(dateYMD)),
+          withTimeout(apptStore.fetchBookedCountsForDate(dateYMD)),
+          auth.user ? withTimeout(apptStore.fetchAppointmentsRange(auth.user.id, 14)) : Promise.resolve(),
         ]);
       } catch (e) {
+        // We use allSettled, so this catch normally won't fire.
         console.error('fetch for date failed:', e);
-        // (Optional) show a quick toast:
-        // snackbar.value = true; // and set a message/color if you have one wired
       }
     }
+
+    const onClearDate = () => {
+      // Use a valid date instead of '' to avoid edge states
+      selectedDate.value = minDate;
+    };
 
     const weekDayName = computed(() => {
       const ymd = toYMD(selectedDate.value as any);
@@ -252,7 +261,6 @@ export default defineComponent({
       const [hh, mm] = t.split(':').map((n) => parseInt(n, 10));
       return (hh || 0) * 60 + (mm || 0);
     };
-    // slot "starts in" [rangeStart, rangeEnd)
     const startInRange = (slotStart?: string, rangeStart?: string, rangeEnd?: string) => {
       if (!slotStart || !rangeStart || !rangeEnd) return false;
       const s = toMinutes(slotStart);
@@ -326,10 +334,12 @@ export default defineComponent({
         });
         if (blockedByClosedRange) return;
 
-        // GLOBAL capacity using counts map
-        const booked = cs.slot_id
-          ? apptStore.bookedCountFor(cs.slot_id, cs.custom_start_time!, cs.custom_end_time!)
-          : apptStore.bookedCountForCustomWindow(cs.custom_start_time!, cs.custom_end_time!);
+        // GLOBAL capacity using counts map (slot_id can be null here)
+        const booked = apptStore.bookedCountFor(
+          cs.slot_id ?? null,
+          cs.custom_start_time!,
+          cs.custom_end_time!
+        );
 
         const bookedOut = booked >= capacity;
 
@@ -378,7 +388,7 @@ export default defineComponent({
         status: 'booked'
       });
       // Refresh both user scope and global counts for the selected date
-      await Promise.all([
+      await Promise.allSettled([
         apptStore.fetchAppointmentsRange(auth.user.id, 14),
         apptStore.fetchBookedCountsForDate(ymd),
       ]);
@@ -390,9 +400,8 @@ export default defineComponent({
     return {
       selectedDate, minDate, maxDate, slotsForDate, book, weekDayName,
       appointmentTypeName, bookingSlotId, loading, dialog, selectedSlot, openBooking, snackbar,
-      mdiClock, mdiAccountGroup, dateMenu, selectedDateDisplay
+      mdiClock, mdiAccountGroup, dateMenu, selectedDateDisplay, onClearDate
     };
   }
 });
 </script>
-
