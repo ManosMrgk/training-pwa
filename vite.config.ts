@@ -5,33 +5,39 @@ import vuetify from 'vite-plugin-vuetify';
 import { fileURLToPath, URL } from 'node:url';
 
 export default defineConfig({
+  base: '/training-pwa/',
   plugins: [
     vue(),
     vuetify({ autoImport: true }),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'robots.txt'],
+      includeAssets: [
+        'favicon.ico',
+        'robots.txt',
+        'apple-touch-icon.png'
+      ],
+      workbox: {
+        navigateFallback: '/training-pwa/index.html',
+      },
       manifest: {
-        name: 'Personal Training',
-        short_name: 'Training',
-        start_url: '.',
+        name: 'BRILS GYM',
+        short_name: 'BRILS',
+        id: '/training-pwa/',          
+        start_url: '/training-pwa/',   
+        scope: '/training-pwa/',       
         display: 'standalone',
-        background_color: '#FFFFFF',
-        theme_color: '#1976D2',
+        background_color: '#0F1115',
+        theme_color: '#111827',
         icons: [
           { src: 'brils-gym-192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'brils-gym-512.png', sizes: '512x512', type: 'image/png' }
-        ]
+          { src: 'brils-gym-512.png', sizes: '512x512', type: 'image/png' },        ]
       }
     })
   ],
   resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url))
-    }
+    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) }
   },
-  base: '/training-pwa/',
   build: {
-    minify: 'esbuild',
+    minify: 'esbuild'
   }
 });
