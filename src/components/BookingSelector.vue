@@ -193,58 +193,51 @@ export default defineComponent({
       return d.toLocaleDateString(undefined, { day: '2-digit', month: 'long', year: 'numeric' });
     });
 
-    // Manual timeout wrapper -> prevents infinite spinner on stalled network
+    // Timeout wrapper
     const withTimeout = <T>(p: Promise<T>, ms = 10000) =>
       Promise.race<T>([
         p,
         new Promise<T>((_, reject) => setTimeout(() => reject(new Error('timeout')), ms)) as Promise<T>,
       ]);
 
-    onMounted(async () => {
+    // ------- request token guard (prevents stale requests from toggling loading) -------
+    let activeReq = 0;
+    const runForDate = async (dateYMD: string) => {
+      const req = ++activeReq;
       loading.value = true;
       try {
-        await Promise.all([
+        await Promise.allSettled([
+          withTimeout(overridesStore.fetchOverridesByDate(dateYMD)),
+          withTimeout(apptStore.fetchBookedCountsForDate(dateYMD)),
+          auth.user ? withTimeout(apptStore.fetchAppointmentsRange(auth.user.id, 14)) : Promise.resolve(),
+        ]);
+      } finally {
+        if (req === activeReq) loading.value = false;
+      }
+    };
+
+    onMounted(async () => {
+      const initDate = toYMD(selectedDate.value as any);
+      try {
+        await Promise.allSettled([
           withTimeout(typesStore.fetchTypes()),
           withTimeout(slotsStore.fetchSlots()),
         ]);
-        await loadForDate(toYMD(selectedDate.value as any));
       } catch (e) {
         console.error('BookingSelector init failed:', e);
-      } finally {
-        loading.value = false;
       }
+      await runForDate(initDate);
     });
 
     // Re-fetch when date changes (normalize first!)
     watch(selectedDate, async (val) => {
       const ymd = toYMD(val as any);
       if (!ymd) return; // safeguard
-      loading.value = true;
-      try {
-        await loadForDate(ymd);
-      } catch (e) {
-        console.error('loadForDate failed:', e);
-      } finally {
-        loading.value = false;
-      }
+      await runForDate(ymd);
     });
 
-    async function loadForDate(dateYMD: string) {
-      try {
-        // Any one of these stalling will no longer freeze the UI
-        await Promise.allSettled([
-          withTimeout(overridesStore.fetchOverridesByDate(dateYMD)),
-          withTimeout(apptStore.fetchBookedCountsForDate(dateYMD)),
-          auth.user ? withTimeout(apptStore.fetchAppointmentsRange(auth.user.id, 14)) : Promise.resolve(),
-        ]);
-      } catch (e) {
-        // We use allSettled, so this catch normally won't fire.
-        console.error('fetch for date failed:', e);
-      }
-    }
-
     const onClearDate = () => {
-      // Use a valid date instead of '' to avoid edge states
+      // Always keep a valid date to avoid edge states
       selectedDate.value = minDate;
     };
 
@@ -292,7 +285,7 @@ export default defineComponent({
 
       const results: any[] = [];
 
-      // Weekly slots for that weekday, minus any "closed_slot" where the slot START falls in the range
+      // Weekly slots
       slotsStore.slots
         .filter(s => s.day_of_week === dow)
         .forEach((s) => {
@@ -302,11 +295,9 @@ export default defineComponent({
           });
           if (isClosedByRange) return;
 
-          // GLOBAL capacity using counts map
           const booked = apptStore.bookedCountFor(s.id, s.start_time, s.end_time);
           const bookedOut = booked >= s.capacity;
 
-          // Skip past-start slots if today
           if (isToday) {
             const [h, m] = s.start_time.split(':').map(Number);
             const slotDateTime = new Date(date); slotDateTime.setHours(h, m, 0, 0);
@@ -322,7 +313,7 @@ export default defineComponent({
           });
         });
 
-      // Custom slots (also suppressed if their START falls inside a closed range)
+      // Custom slots
       customSlots.forEach(cs => {
         const base = cs.slot_id ? slotsStore.slots.find(s => s.id === cs.slot_id) : undefined;
         const capacity = (cs as any).capacity ?? base?.capacity ?? 1;
@@ -334,7 +325,6 @@ export default defineComponent({
         });
         if (blockedByClosedRange) return;
 
-        // GLOBAL capacity using counts map (slot_id can be null here)
         const booked = apptStore.bookedCountFor(
           cs.slot_id ?? null,
           cs.custom_start_time!,
@@ -350,7 +340,7 @@ export default defineComponent({
         }
 
         results.push({
-          id: base?.id ?? -(cs.id as number), // pseudo id for UI if no base slot
+          id: base?.id ?? -(cs.id as number),
           day_of_week: dow,
           start_time: cs.custom_start_time!,
           end_time: cs.custom_end_time!,
@@ -387,7 +377,6 @@ export default defineComponent({
         appointment_type_id: slot.appointment_type_id,
         status: 'booked'
       });
-      // Refresh both user scope and global counts for the selected date
       await Promise.allSettled([
         apptStore.fetchAppointmentsRange(auth.user.id, 14),
         apptStore.fetchBookedCountsForDate(ymd),
