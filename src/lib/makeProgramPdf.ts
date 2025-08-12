@@ -21,18 +21,22 @@ export interface ProgramPayload {
 }
 
 export async function makeProgramPdf(data: ProgramPayload): Promise<Blob> {
-  // dynamically import pdfmake only when needed
-  const [{ default: pdfMake }, { default: pdfFonts }] = await Promise.all([
-    import('pdfmake/build/pdfmake'),
-    import('pdfmake/build/vfs_fonts'),
-  ])
-
-  // bind fonts (pdfmake ships Roboto in vfs_fonts)
-  const pm: any = pdfMake as any
-  const pf: any = pdfFonts as any
-  if (!pm.vfs) {
-    pm.vfs = pf?.pdfMake?.vfs ?? pf?.vfs
-  }
+  const pdfMakeMod = await import('pdfmake/build/pdfmake');
+  const vfsMod = await import('pdfmake/build/vfs_fonts');
+  const pdfMake: any = (pdfMakeMod as any).default ?? pdfMakeMod;
+  const vfs =
+    (vfsMod as any).pdfMake?.vfs ??
+    (vfsMod as any).vfs ??
+    (vfsMod as any).default?.pdfMake?.vfs;
+  pdfMake.vfs = vfs;
+  pdfMake.fonts = {
+    Roboto: {
+      normal: 'Roboto-Regular.ttf',
+      bold: 'Roboto-Medium.ttf',
+      italics: 'Roboto-Italic.ttf',
+      bolditalics: 'Roboto-MediumItalic.ttf',
+    },
+  };
   
   const today = new Date().toLocaleDateString()
 
