@@ -1,71 +1,74 @@
 import { defineStore } from 'pinia';
+import router from '@/router';
 import { supabase } from '@/supabase/client';
 import { useSupabase } from '@/composables/useSupabase';
 import type { User } from '@supabase/supabase-js';
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
-    user: null as null | (User & { role?: string })
+    user: null as null | (User & { role?: string }),
+    isReady: false as boolean,
+    _readyPromise: null as Promise<void> | null,
   }),
 
   actions: {
+    async ensureReady() {
+      if (this.isReady) return
+      if (!this._readyPromise) this._readyPromise = this.init()
+      await this._readyPromise
+    },
     /** 
      * Initialize auth store:
      * - grab any active session
      * - set up listener for future changes 
      */
     async init() {
-      // 1) Try to load existing session
-      const {
-        data: { session } = {},
-        error: sessionError
-      } = await supabase.auth.getSession();
-      if (sessionError) {
-        console.error('Error retrieving session:', sessionError.message);
-      }
-      const user = session?.user ?? null;
+      try {
+        // 1) Load current session
+        const {
+          data: { session } = {},
+          error: sessionError
+        } = await supabase.auth.getSession()
+        if (sessionError) console.error('Error retrieving session:', sessionError.message)
 
-      if (user) {
-        // Fetch role from profiles
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .single();
+        const user = session?.user ?? null
 
-        if (profileError) {
-          console.warn('Could not fetch role from profiles:', profileError.message);
-          this.user = user; // fallback without role
+        if (user) {
+          // 2) Fetch role once (block until we know it so guards are deterministic)
+          const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single()
+
+          this.user = profileError
+            ? user
+            : { ...user, role: profile?.role || 'user' }
         } else {
-          this.user = { ...user, role: profile?.role || 'user' };
+          this.user = null
         }
-      } else {
-        this.user = null;
-      }
 
-      // this.user = session?.user ?? null;
-
-      // 2) Subscribe to login / logout events
-      supabase.auth.onAuthStateChange(async (_event, newSession) => {
-        const newUser = newSession?.user ?? null;
-        if (newUser) {
-          // fetch role on auth change
+        // 3) Listen to future auth changes (update role too)
+        supabase.auth.onAuthStateChange(async (_event, newSession) => {
+          const newUser = newSession?.user ?? null
+          if (!newUser) {
+            this.user = null
+            return
+          }
           const { data: profile, error: profileError } = await supabase
             .from('profiles')
             .select('role')
             .eq('id', newUser.id)
-            .single();
+            .single()
 
-          if (profileError) {
-            console.warn('Could not fetch role from profiles:', profileError.message);
-            this.user = newUser;
-          } else {
-            this.user = { ...newUser, role: profile?.role || 'user' };
-          }
-        } else {
-          this.user = null;
-        }
-      });
+          this.user = profileError
+            ? newUser
+            : { ...newUser, role: profile?.role || 'user' }
+        })
+      } finally {
+        this.isReady = true
+        this._readyPromise = null
+      }
     },
 
     /**

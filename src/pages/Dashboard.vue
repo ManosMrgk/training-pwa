@@ -1,7 +1,7 @@
 <template>
   <DefaultLayout>
     <v-container>
-      <h2 class="text-accent">Your Upcoming Appointments</h2>
+      <h2 class="text-accent">Your Appointments</h2>
 
       <v-data-table
         :items="appointments"

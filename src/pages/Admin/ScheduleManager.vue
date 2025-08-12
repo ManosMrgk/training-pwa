@@ -15,9 +15,9 @@
             <v-card-title class="d-flex align-center">
               Upcoming Bookings
               <v-spacer />
-              <v-btn icon @click="loadAllAppointments">
+              <!-- <v-btn icon @click="loadAllAppointments">
                 <v-icon :icon="mdiRefresh" />
-              </v-btn>
+              </v-btn> -->
             </v-card-title>
 
             <v-card-text>
@@ -80,9 +80,9 @@
           <v-card class="elevation-2">
             <v-card-title>
               Schedule Overrides
-              <v-btn icon @click="loadOverrides" class="ml-2">
+              <!-- <v-btn icon @click="loadOverrides" class="ml-2">
                 <v-icon :icon="mdiRefresh" />
-              </v-btn>
+              </v-btn> -->
               <v-spacer />
               <v-btn color="accent" @click="openOverrideDialog()">New Override</v-btn>
             </v-card-title>
@@ -149,9 +149,9 @@
           <v-card class="elevation-2">
             <v-card-title>
               Weekly Schedule
-              <v-btn icon @click="loadSlots" class="ml-2">
+              <!-- <v-btn icon @click="loadSlots" class="ml-2">
                 <v-icon :icon="mdiRefresh" />
-              </v-btn>
+              </v-btn> -->
               <v-spacer />
               <v-btn color="accent" @click="openSlotDialog()">New Slot</v-btn>
             </v-card-title>
@@ -418,11 +418,33 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+    <v-dialog v-model="confirm.show" max-width="440" persistent>
+      <v-card>
+        <v-card-title class="d-flex align-center">
+          <v-icon :icon="mdiAlert" class="mr-2" color="warning" />
+          <span class="text-h6">{{ confirm.title }}</span>
+        </v-card-title>
+
+        <v-card-text class="text-medium-emphasis">
+          {{ confirm.message }}
+        </v-card-text>
+
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" color="primary" @click="onConfirm(false)">
+            {{ confirm.cancelText || 'Never mind' }}
+          </v-btn>
+          <v-btn :color="confirm.confirmColor || 'error'" @click="onConfirm(true)">
+            {{ confirm.confirmText || 'Confirm' }}
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </DefaultLayout>
 </template>
 
 <script lang="ts">
-import { mdiRefresh, mdiPencil, mdiDelete, mdiEmail } from '@mdi/js';
+import { mdiRefresh, mdiPencil, mdiDelete, mdiEmail, mdiAlert } from '@mdi/js';
 import { defineComponent, ref, computed, onMounted, watch } from 'vue';
 import DefaultLayout from '@/layouts/DefaultLayout.vue';
 import { useAppointmentsStore } from '@/store/appointments';
@@ -472,12 +494,12 @@ export default defineComponent({
     const slotForm = ref<any>(null);
 
     const overrideHeaders = [
-      { text: 'Date', value: 'date' },
-      { text: 'Type', value: 'override_type' },
-      { text: 'Start', value: 'custom_start_time' },
-      { text: 'End', value: 'custom_end_time' },
-      { text: 'Capacity', value: 'capacity' },
-      { text: 'Actions', value: 'actions', sortable: false },
+      { title: 'Date', key: 'date' },
+      { title: 'Type', key: 'override_type' },
+      { title: 'Start', key: 'custom_start_time' },
+      { title: 'End', key: 'custom_end_time' },
+      { title: 'Capacity', key: 'capacity' },
+      { title: 'Actions', key: 'actions', sortable: false },
     ];
 
     const daysOfWeek = [
@@ -495,6 +517,38 @@ export default defineComponent({
       { title: 'Closed Slot', value: 'closed_slot' },
       { title: 'Custom Slot', value: 'custom_slot' },
     ];
+
+    type ConfirmOpts = {
+      title: string;
+      message?: string;
+      confirmText?: string;
+      cancelText?: string;
+      confirmColor?: string; // e.g., 'error', 'accent'
+      icon?: string;
+    };
+
+    const confirm = ref<ConfirmOpts & { show: boolean; resolve?: (v: boolean) => void }>({
+      show: false,
+      title: '',
+    });
+
+    function askConfirm(opts: ConfirmOpts) {
+      return new Promise<boolean>((resolve) => {
+        confirm.value = {
+          show: true,
+          resolve,
+          cancelText: 'Cancel',
+          confirmText: 'Confirm',
+          ...opts,
+        };
+      });
+    }
+
+    function onConfirm(answer: boolean) {
+      confirm.value.resolve?.(answer);
+      confirm.value.show = false;
+      confirm.value.resolve = undefined;
+    }
 
     const groupedAppointments = computed(() => {
       const byDate = groupBy(appointments.value, 'date');
@@ -667,15 +721,21 @@ export default defineComponent({
     };
 
     const deleteOverride = async (id: number) => {
-      if (confirm('Are you sure you want to delete this override?')) {
-        try {
-          const { error } = await supabase.from('overrides').delete().eq('id', id);
-          if (error) throw error;
-          await loadOverrides();
-        } catch (error) {
-          console.error('Error deleting override:', error);
-        }
+      const ok = await askConfirm({
+        title: 'Delete override?',
+        message: 'This will remove the selected override. This action cannot be undone.',
+        confirmText: 'Delete',
+        confirmColor: 'error',
+      });
+      if (!ok) return;
+      try {
+        const { error } = await supabase.from('overrides').delete().eq('id', id);
+        if (error) throw error;
+        await loadOverrides();
+      } catch (error) {
+        console.error('Error deleting override:', error);
       }
+      
     };
 
     const openSlotDialog = (item?: WeeklySlot) => {
@@ -725,29 +785,40 @@ export default defineComponent({
     };
 
     const deleteSlot = async (id: number) => {
-      if (confirm('Are you sure you want to delete this slot?')) {
-        try {
-          const { error } = await supabase.from('weekly_program_slots').delete().eq('id', id);
-          if (error) throw error;
-          await loadSlots();
-        } catch (error) {
-          console.error('Error deleting slot:', error);
-        }
+      const ok = await askConfirm({
+        title: 'Delete slot?',
+        message: 'This will remove the weekly slot from your schedule.',
+        confirmText: 'Delete',
+        confirmColor: 'error',
+      });
+      if (!ok) return;
+      try {
+        const { error } = await supabase.from('weekly_program_slots').delete().eq('id', id);
+        if (error) throw error;
+        await loadSlots();
+      } catch (error) {
+        console.error('Error deleting slot:', error);
       }
+
     };
 
     const cancelBooking = async (appointmentId: number) => {
-      if (confirm('Are you sure you want to cancel this booking?')) {
-        try {
-          const { error } = await supabase
-            .from('appointments')
-            .update({ status: 'cancelled' })
-            .eq('id', appointmentId);
-          if (error) throw error;
-          await loadAllAppointments();
-        } catch (error) {
-          console.error('Error canceling appointment:', error);
-        }
+      const ok = await askConfirm({
+        title: 'Cancel booking?',
+        message: 'The booking will be marked as cancelled.',
+        confirmText: 'Cancel booking',
+        confirmColor: 'error',
+      });
+      if (!ok) return;
+      try {
+        const { error } = await supabase
+          .from('appointments')
+          .update({ status: 'cancelled' })
+          .eq('id', appointmentId);
+        if (error) throw error;
+        await loadAllAppointments();
+      } catch (error) {
+        console.error('Error canceling appointment:', error);
       }
     };
 
@@ -795,7 +866,10 @@ export default defineComponent({
       mdiRefresh, 
       mdiPencil, 
       mdiDelete,
-      mdiEmail
+      mdiEmail,
+      mdiAlert,
+      confirm,
+      onConfirm,
     };
   },
 });

@@ -1,6 +1,5 @@
 <template>
   <v-app>
-    <!-- Top bar -->
     <v-app-bar app color="surface">
       <v-app-bar-nav-icon :style="{ color: appTitleColor }" @click="drawer = !drawer" />
       <v-toolbar-title
@@ -9,31 +8,8 @@
         {{ appTitle }}
       </v-toolbar-title>
       <v-spacer />
-
-      <!-- <v-btn
-        v-if="showAdminButton"
-        variant="text"
-        color="accent"
-        @click="goToAdmin"
-      >
-        <v-icon :icon="mdiShieldCrown" class="mr-1" />
-        Admin
-      </v-btn>
-
-      <v-btn
-        v-if="showDashboardButton"
-        variant="text"
-        color="accent"
-        @click="goToDashboard"
-      >
-        <v-icon :icon="mdiViewDashboard" class="mr-1" />
-        Dashboard
-      </v-btn>
-
-      <v-btn variant="text" color="accent" @click="logout">Logout</v-btn> -->
     </v-app-bar>
 
-    <!-- Drawer on surface -->
     <v-navigation-drawer app v-model="drawer" temporary color="surface">
       <v-list nav density="compact">
         <v-list-item
@@ -48,7 +24,7 @@
         </v-list-item>
 
         <v-list-item
-          v-else-if="showDashboardButton"
+          v-if="showDashboardButton"
           link
           @click="goToDashboard"
         >
@@ -56,6 +32,17 @@
             <v-icon :icon="mdiViewDashboard" color="accent" />
           </template>
           <v-list-item-title class="text-accent">Dashboard</v-list-item-title>
+        </v-list-item>
+
+        <v-list-item
+          v-if="showProgramsButton"
+          link
+          @click="goToPrograms"
+        >
+          <template #prepend>
+            <v-icon :icon="mdiCalendarEdit" color="accent" />
+          </template>
+          <v-list-item-title class="text-accent">Programs</v-list-item-title>
         </v-list-item>
       </v-list>
 
@@ -71,16 +58,16 @@
       </template>
     </v-navigation-drawer>
 
-    <!-- Gray page body -->
-    <v-main class="bg-background">
-      <v-container fluid>
-        <slot />
-      </v-container>
+    <v-main class="bg-background layout-main">
+      <div class="scroll-area">
+        <v-container fluid class="fill-height">
+          <slot />
+        </v-container>
+      </div>
     </v-main>
 
-    <!-- Footer -->
     <v-footer app padless color="surface">
-      <v-col class="text-center py-4" cols="12">
+      <v-col class="text-center py-3" cols="12">
         © {{ year }} {{ appTitle }}
       </v-col>
     </v-footer>
@@ -91,7 +78,7 @@
 import { defineComponent, ref, computed } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '@/store/auth';
-import { mdiLogout, mdiViewDashboard, mdiShieldCrown } from '@mdi/js';
+import { mdiLogout, mdiViewDashboard, mdiShieldCrown, mdiCalendarEdit } from '@mdi/js';
 import appConfig from '@/config/app';
 
 export default defineComponent({
@@ -107,13 +94,17 @@ export default defineComponent({
     const auth = useAuthStore();
 
     const isAdmin = computed(() => auth.user?.role === 'admin');
-    const isOnAdmin = computed(() => route.path.startsWith('/admin'));
+    const isOnAdmin = computed(() => route.path === '/admin');
+    const isOnDashboard = computed(() => route.path === '/');
+    const isOnPrograms = computed(() => route.path === '/admin/programs');
 
     const showAdminButton = computed(() => isAdmin.value && !isOnAdmin.value);
-    const showDashboardButton = computed(() => (isAdmin.value && isOnAdmin.value) || !isAdmin.value);
+    const showProgramsButton = computed(() => isAdmin.value && !isOnPrograms.value);
+    const showDashboardButton = computed(() => (!isOnDashboard.value));
 
     function goToDashboard() { router.push('/'); }
     function goToAdmin() { router.push('/admin'); }
+    function goToPrograms() { router.push('/admin/programs'); }
     async function logout() { await auth.logout(); router.push('/login'); }
 
     const year = new Date().getFullYear();
@@ -122,12 +113,15 @@ export default defineComponent({
       drawer,
       goToDashboard,
       goToAdmin,
+      goToPrograms,
       logout,
       showAdminButton,
+      showProgramsButton,
       showDashboardButton,
       mdiLogout,
       mdiViewDashboard,
       mdiShieldCrown,
+      mdiCalendarEdit,
       appTitle,
       appTitleWeight,
       appTitleColor,
@@ -136,3 +130,24 @@ export default defineComponent({
   }
 });
 </script>
+
+<style scoped>
+.layout-main {
+  height: 100dvh; /* Use 100dvh for more accurate mobile sizing */
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.scroll-area {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto; /* This is where the scrollbar is */
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.fill-height {
+  height: 100%;
+}
+</style>
