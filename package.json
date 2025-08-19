@@ -9,6 +9,7 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@mdi/font": "^7.4.47",
     "@mdi/js": "^7.4.47",
     "@supabase/supabase-js": "^2.0.0",
     "pdfmake": "^0.2.20",

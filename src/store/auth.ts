@@ -85,9 +85,20 @@ export const useAuthStore = defineStore('auth', {
      * Register a new account.
      */
     async register(email: string, password: string) {
-      const { data, error } = await useSupabase().signUp(email, password);
+      const base = import.meta.env.BASE_URL || '/'
+      const redirectTo = `${window.location.origin}${base}`
+
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: redirectTo }
+      })
+
       if (error) throw error;
-      this.user = data.user;
+     
+      if (data.session) {
+        await useSupabase().signOut();
+      }
     },
 
     /**
