@@ -172,10 +172,13 @@ export default defineComponent({
     };
 
     const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowDate = toYMD(tomorrow);
     const minDate = toYMD(today);
     const maxDate = toYMD(new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000));
 
-    const selectedDate = ref<string | Date>(minDate);
+    const selectedDate = ref<string | Date>(tomorrowDate);
     const bookingSlotId = ref<number|null>(null);
     const loading = ref(true);
 
