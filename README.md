@@ -1,5 +1,19 @@
-# Vue 3 + TypeScript + Vite
+# Personal Training Appointments PWA
 
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+A lightweight Progressive Web App for trainers to manage sessions and for clients to book available time slots.
 
-Learn more about the recommended Project Setup and IDE Support in the [Vue Docs TypeScript Guide](https://vuejs.org/guide/typescript/overview.html#project-setup).
+**Live demo:** [https://manosmrgk.github.io/training-pwa/](https://manosmrgk.github.io/training-pwa/)
+
+## Stack
+
+- Frontend: Vue.js
+
+- Backend: Supabase (auth, DB, storage)
+
+## Features
+
+- Trainer: manage availability and appointments, export branded training programs for clients (PDF)
+
+- Client: browse slots, book/reschedule/cancel (within rules)
+
+- PWA: installable, offline-ready core pages
